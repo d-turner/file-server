@@ -6,3 +6,4 @@ Modules and classes for Replication, Locking and Transactions
 
 Ruby Version 2.7.*
 Requires thread, socket
+Added
