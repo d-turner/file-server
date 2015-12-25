@@ -1,8 +1,8 @@
 require 'thread'
 require 'socket'
-require './directory_service'
+require 'timeout'
 
-class SocketServer
+class Socket_Server
 
   def initialize(port)
     @port = port
@@ -12,57 +12,58 @@ class SocketServer
     @que = Queue.new
     addr_infos = Socket.ip_address_list
     @ip = addr_infos[1].ip_address.to_s
-    @main = Thread.current
+    @threads = nil
   end
 
   def run
-    x = Thread.new {
+    Thread.new {
       while true do
         if @que.length > @max
-          @server.accept
+          @server.reject
         else
           @que.push(@server.accept)
         end
       end
     }
-    threads = @max_threads.times.map do
+    @threads = @max_threads.times.map do
       Thread.new{connection}
     end
-    threads.map &:join
-    puts "Quiting"
+    @threads.map &:join
+    puts 'Quiting'
   end
 
+  # outdated
   def connection
     begin
       while true
         client = @que.pop(false)
-          while true
-            readLine = client.readline
-            if readLine == "KILL_SERVICE\n"
-              client.close
-              puts "Killing"
-              Thread.list.each do |thread|
-                thread.exit unless thread == @main
-              end
-            elsif readLine.start_with?("HELO")
-              reply = readLine.concat("IP:#{@ip}\nPort:#{@port}\nStudentID:33d4fcfd69df0c9bbbd0bd54ce854663db8238836b6faec70a00cf9e835a6bd1\n")
-              client.write(reply)
-              client.flush
-            end
+        while true
+          readLine = client.readline
+          if readLine == 'KILL_SERVICE\n'
+            kill(client)
+          elsif readLine.start_with?('HELO')
+            student(client,readLine)
           end
         end
-      rescue ThreadError
       end
+      rescue ThreadError
     end
   end
 
-port = 3000
-if ARGV[0] == nil
-  puts "No Port Specified using default 3000"
-else
-  port = ARGV[0]
-end
+  def kill(client)
+    client.close
+    puts 'Killing'
+    @online = false
+    @threads.each do |thread|
+      thread.exit unless thread == Thread.current
+    end
+    Thread.exit
+  end
 
-puts "Using Port Number #{port}"
-server = SocketServer.new(port)
-server.run
+  def student(client, read_line)
+    reply = read_line.concat("IP:#{@ip}\nPort:#{@port}\nStudentID:33d4fcfd69df0c9bbbd0bd54ce854663db8238836b6faec70a00cf9e835a6bd1\n")
+    client.write(reply)
+    client.flush
+  end
+
+end
