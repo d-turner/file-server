@@ -1,4 +1,4 @@
-file = File.open("/etc/ts.conf", 'r')
+file = File.open("/etc/ts.conf", 'w')
 if file.nil?
   puts "can't open"
 else
