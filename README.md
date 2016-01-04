@@ -14,3 +14,6 @@ File_class.open(filename)
 def open(filename)
   does socket stuff here
 end
+
+### Initialise the directory server
+
