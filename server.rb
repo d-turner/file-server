@@ -13,6 +13,11 @@ class Socket_Server
     addr_infos = Socket.ip_address_list
     @ip = addr_infos[1].ip_address.to_s
     @threads = nil
+    @not_found = '404'
+    @get_listing = '--file_list--'
+    @find_server = 'where_is:'
+    @open_file = 'open:'
+    @end_transmission = '--END--'
   end
 
   def run
