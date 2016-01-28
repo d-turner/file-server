@@ -1,45 +1,47 @@
 require './server'
 
 class Directory_Service < Socket_Server
+
   def initialize(port)
-    # call initializer of the server class
     #@port, @server, @max_threads, @max(q), @que, @ip, @main(thread)
     super(port)
-    @file_servers = {1=>'localhost:4001', 2=>'localhost:4002', 3=>'localhost:4003', 4=>'localhost:4004'}
+    @file_servers = []
     @files = {}
-    query_servers
   end
 
-  # override connection
   def connection
     begin
       while true
         client = @que.pop(false)
         begin
-          timeout(5) do
-            client.each_line do |read_line|
-              if read_line == "KILL_SERVICE\n"
-                kill(client)
-              elsif read_line.start_with?('HELO')
-                student(client, read_line)
-              elsif read_line.start_with?(@find_server)
-                #elsif read_line.start_with?('open')
-                  # expecting=> "open file.txt"
-                  #          => "open ComputerName:\dir1\dir2\file.txt"
-                  #words = read_line.split(' ')
-                  #directory = words[1].split('/')
-                  #directory = directory.reject{|d| d.empty?}
-                read_line = read_line.strip
-                puts "#{read_line}"
-		            #address = lookup(read_line.split(' ')[1].split('/').reject {|d| d.empty?}[0] )
-                address = lookup(read_line.split(':')[1])
-                if address.nil?; client.puts(@not_found)
-                else client.puts(address); end
-                client.flush
-                client.close
-                break
+          timeout(500) do
+            read_line = client.readline
+
+            if read_line == END_TRANS;  client.close
+
+            elsif read_line == KILL;  kill(client)
+
+            elsif read_line.start_with?HELO;  student(client, read_line)
+
+            elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1])
+
+            elsif read_line == JOIN_REQUEST;  manage_join(client)
+
+            elsif read_line.start_with?ACTION
+              action = read_line.strip.split(':')[1]
+              case action
+                when '1'; print_files
+                when '2'; print_servers
+                when '3'; query_servers
+                else ; print 'No action'
               end
+              client.close
+
+            else
+              puts 'Command not known'
+              client.close
             end
+
           end
         rescue Timeout::Error
           puts 'Timed Out!'
@@ -51,40 +53,82 @@ class Directory_Service < Socket_Server
     end
   end
 
-  def lookup(filename)
-    @files[filename]
+  def lookup(client, filename)
+    address =  @files[filename]
+    if address.nil?; client.puts(NOT_FOUND)
+    elsif !@file_servers.include? address;  client.puts(NOT_FOUND)
+    else client.puts(address); end
+    client.puts(END_TRANS)
+    client.flush
+    client.close
   end
 
-  def add_server(name, address)
-    @file_servers[name=>address]
+  def remove_server(address)
+    @file_servers.delete(address)
   end
 
-  def remove_server(server_name)
-    @file_servers.delete(server_name)
-  end
-
-  def update_server(server_name, new_location )
-    @file_servers[server_name] = new_location
+  def manage_join(client)
+    client.puts(ACCEPT)
+    fs_ip = client.readline
+    fs_port = client.readline
+    end_trans = client.readline
+    if end_trans == END_TRANS && fs_ip.start_with?('--IP:') && fs_port.start_with?('--PORT:')
+      fs_ip = fs_ip.strip.split(':')[1]
+      fs_port = fs_port.strip.split(':')[1]
+      address = fs_ip + ':' + fs_port
+      unless @file_servers.include?address
+        @file_servers.push(address)
+      end
+    else
+      puts 'Failed to add server'
+      client.puts(DECLINE)
+    end
+    client.puts(END_TRANS)
+    client.flush
+    client.close
+    unless address.nil?
+      query_server address
+    end
   end
 
   def query_servers
-    @file_servers.each do |key, location|
-      local = location.split(':')
-      address = local[0]
-      port = local[1]
-      fs = TCPSocket.new address, port
-      fs.puts(@get_listing)
-      fs.each_line do |read_line|
-        read_line = read_line.strip
-        if read_line == @end_transmission
-          break
-        end
-        filename = read_line.split('/').last
-        @files[filename] = location
-      end
-      fs.close
+    @file_servers.each do |fs|
+      query_server fs
     end
-    puts "#{@files}"
+  end
+
+  def query_server(address)
+    begin
+      (ip,port) = address.split(':')
+      fs = TCPSocket.new ip, port
+      fs.puts(GET_LISTING)
+      fs.each_line do |read_line|
+        if read_line == END_TRANS
+          puts 'Finished gathering files...'
+        else
+          filename = read_line.strip.split('/').last
+          @files[filename] = address
+        end
+      end
+    rescue Errno::ECONNREFUSED
+      puts 'File server down removing...'
+      @file_servers.delete(address)
+    end
+    fs.flush
+    fs.close
+  end
+
+  def print_files
+    @files.each do |file, server|
+      puts "File: #{file}, Server Address: #{server}"
+    end
+  end
+
+  def print_servers
+    @file_servers.each do |fs|
+      (ip, port) = fs.split(':')
+      puts 'IP: ' + ip + ', Port: ' + port
+    end
   end
 
 end
