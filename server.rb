@@ -1,7 +1,22 @@
 require 'thread'
 require 'socket'
 require 'timeout'
-
+END_TRANS = "--END--\n"
+NOT_FOUND = "404\n"
+JOIN_REQUEST = "--JOIN_REQUEST--\n"
+ACCEPT = "--ACCEPT--\n"
+DECLINE = "--DECLINE--\n"
+GET_LISTING = "--FILE_LIST--\n"
+FIND_SERVER = "--WHERE_IS:"
+OPEN_FILE = "--OPEN:"
+WRITE_FILE = "--WRITE:"
+KILL = "KILL_SERVICE\n"
+HELO = "HELO"
+IP_ADD = "--IP:%s\n"
+PORT_ADD = "--PORT:%s\n"
+ACTION = "--ACTION:"
+DIR_ADD = 'localhost'
+DIR_PORT = 3001
 class Socket_Server
 
   def initialize(port)
@@ -13,11 +28,6 @@ class Socket_Server
     addr_infos = Socket.ip_address_list
     @ip = addr_infos[1].ip_address.to_s
     @threads = nil
-    @not_found = '404'
-    @get_listing = '--file_list--'
-    @find_server = 'where_is:'
-    @open_file = 'open:'
-    @end_transmission = '--END--'
   end
 
   def run
@@ -43,15 +53,17 @@ class Socket_Server
       while true
         client = @que.pop(false)
         while true
-          readLine = client.readline
-          if readLine == 'KILL_SERVICE\n'
-            kill(client)
-          elsif readLine.start_with?('HELO')
-            student(client,readLine)
+          read_line = client.readline
+
+          if read_line == KILL;  kill(client)
+
+          elsif read_line.start_with?(HELO);  student(client,read_line)
+
           end
         end
-      end
-      rescue ThreadError
+        end
+    rescue ThreadError
+      puts 'Thread Error'
     end
   end
 
@@ -69,6 +81,7 @@ class Socket_Server
     reply = read_line.concat("IP:#{@ip}\nPort:#{@port}\nStudentID:33d4fcfd69df0c9bbbd0bd54ce854663db8238836b6faec70a00cf9e835a6bd1\n")
     client.write(reply)
     client.flush
+    client.close
   end
 
 end
