@@ -6,53 +6,33 @@ class File_Server < Socket_Server
     # call initializer of the server class
     #@port, @server, @max_threads, @max(q), @que, @ip, @main(thread)
     super(port)
-    @files = {}
-    p=@port%4000
-    @dir = 'file_server'+p.to_s
+    @dir = 'file_server'+@port.to_s
+    request_to_join
   end
 
   # override connection
   def connection
     begin
       while true
-           client = @que.pop(false)
+        client = @que.pop(false)
         begin timeout(5) do
-          client.each_line do |read_line|
-            puts "#{read_line}"
-            if read_line == 'KILL_SERVICE\n'   ; kill(client)
-            elsif read_line.start_with?('HELO'); student(client, read_line)
+          read_line = client.readline
 
-            elsif read_line.start_with?(@open_file)
-              file = find_file(read_line.strip)
-              if file != @not_found
-                file = open_file(file)
-                if file == @not_found
-                  puts 'File not found'
-                else
-                  file.each_line do |line|
-                    client.puts(line)
-                    puts "#{line}"
-                  end
-                  file.close
-                end
-              end
-              client.puts(@end_transmission)
-              client.flush
-              client.close
-              break
+          if read_line == END_TRANS;  client.close
 
-            elsif read_line <=> @get_listing
-              files = Dir[@dir+'/**/*']
-              files.each do |file|
-                puts "#{file}"
-                client.puts(file)
-              end
-              client.puts(@end_transmission)
-              client.flush
-              client.close
-              break
-            end
+          elsif read_line == KILL;  kill(client)
+
+          elsif read_line.start_with?(HELO);  student(client, read_line)
+
+          elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line)
+
+          elsif read_line == GET_LISTING;  send_file_list(client)
+
+          else
+            puts 'Command not known'
+            client.close
           end
+
         end
         rescue Timeout::Error
           puts 'Timed Out!'
@@ -72,25 +52,59 @@ class File_Server < Socket_Server
     end
   end
 
-  def open_file(path)
+  def send_file_list(client)
+    file_names = Dir[@dir+'/**/*']
+    file_names.each do |file|
+      client.puts(file)
+    end
+    client.puts(END_TRANS)
+    client.flush
+    client.close
+  end
+
+  def open_file(client, path)
     if File.exist?(path)
-      File.open(path, 'r')
-    else @not_found end
-  end
-
-  def close_file(file)
-    file.close
-  end
-
-  def find_file(find_file)
-    files = Dir[@dir+'/**/*']
-    files.each do |file|
-      filename = file.split('/').last
-      if filename <=> find_file
-        return file
+      File.open(path, 'r') do |f|
+        f.each_line do |line|
+          client.puts(line)
+        end
       end
     end
-    return @not_found
+  end
+
+  def find_file(client, find)
+    find = find.strip.split(':')[1]
+    file_names = Dir[@dir+'/**/*']
+    file_names.each do |path|
+      filename = path.split('/').last
+      if filename == find
+        open_file(client, path)
+      end
+    end
+    client.puts(END_TRANS)
+    client.flush
+    client.close
+  end
+
+  def request_to_join
+    ds = TCPSocket.new DIR_ADD, DIR_PORT
+    ds.puts(JOIN_REQUEST)
+    read_line = ds.readline
+    if read_line == ACCEPT
+      ds.puts(IP_ADD % @ip)
+      ds.puts(PORT_ADD % @port)
+      ds.puts(END_TRANS)
+      read_line = ds.readline
+      if read_line == END_TRANS
+        puts 'Successfully added'
+      else
+        puts 'Failed to add'
+      end
+    else
+      puts 'Failed to add'
+    end
+    ds.flush
+    ds.close
   end
 
 end
