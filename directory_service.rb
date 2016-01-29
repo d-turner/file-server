@@ -25,6 +25,8 @@ class Directory_Service < Socket_Server
 
             elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1])
 
+            elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1])
+
             elsif read_line == JOIN_REQUEST;  manage_join(client)
 
             elsif read_line.start_with?ACTION
@@ -53,6 +55,18 @@ class Directory_Service < Socket_Server
     end
   end
 
+  def allocate_server(client, filename)
+    address =  @files[filename]
+    if address.nil?
+      i = Random.new.rand(0..@file_servers.length-1)
+      client.puts(@file_servers[i])
+      @files[filename] = @file_servers[i]
+    else client.puts(address); end
+    client.puts(END_TRANS)
+    client.flush
+    client.close
+  end
+
   def lookup(client, filename)
     address =  @files[filename]
     if address.nil?; client.puts(NOT_FOUND)
@@ -72,6 +86,7 @@ class Directory_Service < Socket_Server
     fs_ip = client.readline
     fs_port = client.readline
     end_trans = client.readline
+    address = nil
     if end_trans == END_TRANS && fs_ip.start_with?('--IP:') && fs_port.start_with?('--PORT:')
       fs_ip = fs_ip.strip.split(':')[1]
       fs_port = fs_port.strip.split(':')[1]

@@ -26,6 +26,8 @@ class File_Server < Socket_Server
 
           elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line)
 
+          elsif read_line.start_with?(WRITE_FILE);  write_file(client, read_line)
+
           elsif read_line == GET_LISTING;  send_file_list(client)
 
           else
@@ -44,12 +46,19 @@ class File_Server < Socket_Server
     end
   end
 
-  def write_file(directory_name, file_name, data)
-    if File.directory?(directory_name)
-      if File.exists?(directory_name+'/'+file_name)
-        File.open(directory_name+'/'+file_name, 'w').write(data)
-      else nil end
+  def write_file(client, filename)
+    filename = filename.strip.split(':')[1]
+    client.puts(ACCEPT)
+    File.open(@dir+'/'+filename, 'w') do |f|
+      client.each_line do |line|
+        if line == END_TRANS
+          puts 'File saved'
+        else
+          f.write(line)
+        end
+      end
     end
+    client.close
   end
 
   def send_file_list(client)
