@@ -1,12 +1,5 @@
-require 'socket'
 require './client_proxy'
 proxy  = Client_Proxy.new
-# press 1 to retrieve remote file -> enter file name and press enter
-# press 2 to save local file to remote server -> enter file name and press enter
-# Debugging: press 3 to print files on directory server
-#            press 4 to print servers on directory server
-#            press 5 make directory server query file servers
-# press 6 to exit
 
 def print(x)
   c = TCPSocket.new 'localhost', 3001
@@ -47,9 +40,8 @@ while input != "9\n"
       proxy.open(filename.strip)
     when "2\n"
       puts "Enter file name and press enter\n"
-      puts "Nothing yet\n"
-      #filename = gets
-      #proxy.open(filename)
+      filename = gets
+      proxy.write(filename)
     when "3\n"; print(1)
     when "4\n"; print(2)
     when "5\n"; print(3)

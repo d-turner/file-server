@@ -22,8 +22,16 @@ ACTION = "--ACTION:%d\n"
     @not_found = '404'
   end
 
+  def directory_server(filename, msg)
+    ds = TCPSocket.new @dir_server_address, @dir_server_port
+    ds.puts(msg % filename)
+    reply = ds.readline
+    ds.close
+    reply
+  end
+
   def open(filename)
-    reply = directory_server(filename)
+    reply = directory_server(filename, FIND_SERVER)
     if reply == NOT_FOUND
       puts 'File does not exist'
     else
@@ -34,14 +42,6 @@ ACTION = "--ACTION:%d\n"
       fs.puts(OPEN_FILE % filename)
       save_file(fs, filename)
     end
-  end
-
-  def directory_server(filename)
-    ds = TCPSocket.new @dir_server_address, @dir_server_port
-    ds.puts(FIND_SERVER % filename)
-    reply = ds.readline
-    ds.close
-    reply
   end
 
   def save_file(fs, filename)
@@ -57,6 +57,27 @@ ACTION = "--ACTION:%d\n"
         else
           file.write(line)
         end
+      end
+    end
+  end
+
+  def write(filename)
+    filename = filename.strip
+    address = directory_server(filename, WRITE_FILE)
+    (ip, port) = address.strip.split(':')
+    TCPSocket.open ip, port do |fs|
+      fs.puts(WRITE_FILE % filename)
+      reply = fs.readline
+      if reply.equal?(END_TRANS)
+        puts 'Failed to add file...'
+      else
+        File.open(@output_dir+filename, 'r') do |file|
+          file.each_line do |line|
+            fs.puts(line)
+          end
+        end
+        fs.puts(END_TRANS)
+        fs.flush
       end
     end
   end
