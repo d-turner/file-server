@@ -15,20 +15,27 @@ class File_Server < Socket_Server
     begin
       while true
         client = @que.pop(false)
-        begin timeout(5) do
-          read_line = client.readline
+        begin timeout(25) do
+          ticket = client.readline
+          (cipher, decipher) = get_ciphers
+          cipher.key = @server_key
+          sk = get_session_key(ticket.strip, cipher)
+          cipher.key = sk
+          decipher.key = sk
+          msg = client.readline
+          read_line = decrypt(msg, decipher)
 
           if read_line == END_TRANS;  client.close
 
           elsif read_line == KILL;  kill(client)
 
-          elsif read_line.start_with?(HELO);  student(client, read_line)
+          elsif read_line.start_with?(HELO);  student(client, read_line, cipher)
 
-          elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line)
+          elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line, cipher)
 
-          elsif read_line.start_with?(WRITE_FILE);  write_file(client, read_line)
+          elsif read_line.start_with?(WRITE_FILE);  write_file(client, read_line, cipher, decipher)
 
-          elsif read_line == GET_LISTING;  send_file_list(client)
+          elsif read_line == GET_LISTING;  send_file_list(client, cipher)
 
           else
             puts 'Command not known'
@@ -46,11 +53,13 @@ class File_Server < Socket_Server
     end
   end
 
-  def write_file(client, filename)
+  # Write file on client to file server
+  def write_file(client, filename, cipher, decipher)
     filename = filename.strip.split(':')[1]
-    client.puts(ACCEPT)
+    client.puts(encrypt(ACCEPT, cipher))
     File.open(@dir+'/'+filename, 'w') do |f|
-      client.each_line do |line|
+      client.each_line do |data|
+        line = decrypt(data, decipher)
         if line == END_TRANS
           puts 'File saved'
         else
@@ -61,49 +70,62 @@ class File_Server < Socket_Server
     client.close
   end
 
-  def send_file_list(client)
+  # Send file list to directory server
+  def send_file_list(client, cipher)
     file_names = Dir[@dir+'/**/*']
     file_names.each do |file|
-      client.puts(file)
+      data = encrypt(file, cipher)
+      client.puts(data)
     end
-    client.puts(END_TRANS)
+    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
 
-  def open_file(client, path)
+  # Open file for sending to client
+  def open_file(client, path, cipher)
     if File.exist?(path)
       File.open(path, 'r') do |f|
         f.each_line do |line|
-          client.puts(line)
+          client.puts(encrypt(line, cipher))
         end
       end
     end
   end
 
-  def find_file(client, find)
+  def find_file(client, find, cipher)
     find = find.strip.split(':')[1]
     file_names = Dir[@dir+'/**/*']
     file_names.each do |path|
       filename = path.split('/').last
       if filename == find
-        open_file(client, path)
+        open_file(client, path, cipher)
       end
     end
-    client.puts(END_TRANS)
+    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
 
   def request_to_join
     ds = TCPSocket.new DIR_ADD, DIR_PORT
-    ds.puts(JOIN_REQUEST)
-    read_line = ds.readline
+    (cipher, decipher) = get_ciphers
+    cipher.key = @server_key
+    decipher.key = @server_key
+    #msg = "--Ticket:%s\n" % @server_key
+    msg = "--Ticket:gen_random_key\n"
+    data = encrypt(msg, cipher)
+    ds.puts(data)
+    msg2 = encrypt(JOIN_REQUEST, cipher)
+    ds.puts(msg2)
+    data = ds.readline
+    read_line = decrypt(data, decipher)
     if read_line == ACCEPT
-      ds.puts(IP_ADD % @ip)
-      ds.puts(PORT_ADD % @port)
-      ds.puts(END_TRANS)
-      read_line = ds.readline
+      ds.puts(encrypt(IP_ADD % @ip, cipher))
+      ds.puts(encrypt(PORT_ADD % @port, cipher))
+      ds.puts(encrypt(END_TRANS, cipher))
+      data = ds.readline
+      read_line = decrypt(data, decipher)
       if read_line == END_TRANS
         puts 'Successfully added'
       else

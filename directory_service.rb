@@ -14,34 +14,43 @@ class Directory_Service < Socket_Server
       while true
         client = @que.pop(false)
         begin
-          timeout(500) do
-            read_line = client.readline
-
-            if read_line == END_TRANS;  client.close
-
-            elsif read_line == KILL;  kill(client)
-
-            elsif read_line.start_with?HELO;  student(client, read_line)
-
-            elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1])
-
-            elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1])
-
-            elsif read_line == JOIN_REQUEST;  manage_join(client)
-
-            elsif read_line.start_with?ACTION
-              action = read_line.strip.split(':')[1]
-              case action
-                when '1'; print_files
-                when '2'; print_servers
-                when '3'; query_servers
-                else ; print 'No action'
-              end
+          timeout(25) do
+            ticket = client.readline
+            if ticket.start_with?ACTION
+              action(ticket)
               client.close
-
             else
-              puts 'Command not known'
-              client.close
+              (cipher, decipher) = get_ciphers
+              decipher.key = @server_key
+              sk = get_session_key(ticket.strip, decipher)
+              puts "Session Key:"
+              p sk
+              puts "Server key:"
+              p @server_key
+              cipher.key = sk
+              decipher.decrypt
+              decipher.key = sk
+              msg = client.readline
+              read_line = decrypt(msg.strip, decipher)
+              puts "READ LINE:"
+              p read_line
+              if read_line == END_TRANS;  client.close
+
+              elsif read_line == KILL;  kill(client)
+
+              elsif read_line.start_with?HELO;  student(client, read_line, cipher)
+
+              elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1], cipher, decipher)
+
+              elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1], cipher, decipher)
+
+              elsif read_line == JOIN_REQUEST;  manage_join(client, cipher, decipher)
+
+              else
+                puts 'Command not known'
+                manage_join(client, cipher, decipher)
+                #client.close
+              end
             end
 
           end
@@ -55,24 +64,24 @@ class Directory_Service < Socket_Server
     end
   end
 
-  def allocate_server(client, filename)
+  def allocate_server(client, filename, cipher, decipher)
     address =  @files[filename]
     if address.nil?
       i = Random.new.rand(0..@file_servers.length-1)
-      client.puts(@file_servers[i])
+      client.puts(encrypt(@file_servers[i], cipher))
       @files[filename] = @file_servers[i]
-    else client.puts(address); end
-    client.puts(END_TRANS)
+    else client.puts(encrypt(address, cipher)); end
+    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
 
-  def lookup(client, filename)
+  def lookup(client, filename, cipher, decipher)
     address =  @files[filename]
-    if address.nil?; client.puts(NOT_FOUND)
-    elsif !@file_servers.include? address;  client.puts(NOT_FOUND)
-    else client.puts(address); end
-    client.puts(END_TRANS)
+    if address.nil?; client.puts(encrypt(NOT_FOUND, cipher))
+    elsif !@file_servers.include? address;  client.puts(encrypt(NOT_FOUND, cipher))
+    else client.puts(encrypt(address, cipher)); end
+    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
@@ -81,11 +90,14 @@ class Directory_Service < Socket_Server
     @file_servers.delete(address)
   end
 
-  def manage_join(client)
-    client.puts(ACCEPT)
-    fs_ip = client.readline
-    fs_port = client.readline
-    end_trans = client.readline
+  def manage_join(client, cipher, decipher)
+    client.puts(encrypt(ACCEPT, cipher))
+    data = client.readline
+    fs_ip = decrypt(data, decipher)
+    data = client.readline
+    fs_port = decrypt(data, decipher)
+    data = client.readline
+    end_trans= decrypt(data, decipher)
     address = nil
     if end_trans == END_TRANS && fs_ip.start_with?('--IP:') && fs_port.start_with?('--PORT:')
       fs_ip = fs_ip.strip.split(':')[1]
@@ -96,9 +108,9 @@ class Directory_Service < Socket_Server
       end
     else
       puts 'Failed to add server'
-      client.puts(DECLINE)
+      client.puts(encrypt(DECLINE, cipher))
     end
-    client.puts(END_TRANS)
+    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
     unless address.nil?
@@ -116,12 +128,18 @@ class Directory_Service < Socket_Server
     begin
       (ip,port) = address.split(':')
       fs = TCPSocket.new ip, port
-      fs.puts(GET_LISTING)
-      fs.each_line do |read_line|
-        if read_line == END_TRANS
+      (cipher, decipher) = get_ciphers
+      cipher.key = @server_key
+      decipher.key = @server_key
+      fs.puts(encrypt("--Ticket:%s\n" % @server_key, cipher))
+      fs.puts(encrypt(GET_LISTING, cipher))
+      puts "Fucking here"
+      fs.each_line do |rd|
+        line = decrypt(rd, decipher)
+        if line == END_TRANS
           puts 'Finished gathering files...'
         else
-          filename = read_line.strip.split('/').last
+          filename = line.strip.split('/').last
           @files[filename] = address
         end
       end
@@ -146,6 +164,15 @@ class Directory_Service < Socket_Server
     end
   end
 
+  def action(read_line)
+    action = read_line.strip.split(':')[1]
+    case action
+    when '1'; print_files
+    when '2'; print_servers
+    when '3'; query_servers
+    else ; print 'No action'
+    end
+  end
 end
 
 port = 3001
