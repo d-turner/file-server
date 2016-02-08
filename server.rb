@@ -1,25 +1,27 @@
 require 'thread'
 require 'socket'
 require 'timeout'
-require 'openssl'
+require 'aescrypt'
 require 'base64'
-END_TRANS = "--END--\n"
-NOT_FOUND = "404\n"
-JOIN_REQUEST = "--JOIN_REQUEST--\n"
-ACCEPT = "--ACCEPT--\n"
-DECLINE = "--DECLINE--\n"
-GET_LISTING = "--FILE_LIST--\n"
-FIND_SERVER = "--WHERE_IS:"
-OPEN_FILE = "--OPEN:"
-WRITE_FILE = "--WRITE:"
-KILL = "KILL_SERVICE\n"
-HELO = "HELO"
-IP_ADD = "--IP:%s\n"
-PORT_ADD = "--PORT:%s\n"
-ACTION = "--ACTION:"
-AUTH_USER = "--AUTHENTICATE:"
+require 'rubygems'
+END_TRANS = '--END--'
+NOT_FOUND = '404'
+JOIN_REQUEST = '--JOIN_REQUEST--'
+ACCEPT = '--ACCEPT--'
+DECLINE = '--DECLINE--'
+GET_LISTING = '--FILE_LIST--'
+FIND_SERVER = '--WHERE_IS:'
+OPEN_FILE = '--OPEN:'
+WRITE_FILE = '--WRITE:'
+KILL = 'KILL_SERVICE'
+HELO = 'HELO'
+IP_ADD = '--IP:%s'
+PORT_ADD = '--PORT:%s'
+ACTION = '--ACTION:'
+AUTH_USER = '--AUTHENTICATE:'
 DIR_ADD = 'localhost'
 DIR_PORT = 3001
+
 class Socket_Server
 
   def initialize(port)
@@ -31,8 +33,7 @@ class Socket_Server
     addr_infos = Socket.ip_address_list
     @ip = addr_infos[1].ip_address.to_s
     @threads = nil
-    @server_key = "Tf\x17(\xF6\xFF\xF5V(\xEE\x0Fla\x0F\"\xF1"
-    #@iv = "Ik\xCB\x96\xEC\"\xE5\x90\x11\xD7\xA1\xF2-H\xD0\xA4"
+    @server_key = "VGYXKPb/9VYo7g9sYQ8i8Q=="
   end
 
   def run
@@ -75,9 +76,9 @@ class Socket_Server
     client.close
   end
 
-  def get_session_key(data, decipher)
+  def get_session_key(data)
     data = data.strip
-    ticket = decrypt(data, decipher)
+    ticket = decrypt(data, @server_key)
     if ticket.start_with?("--Ticket:")
       ticket.strip.split(':')[1]
     else
@@ -86,10 +87,8 @@ class Socket_Server
     end
   end
 
-  def encrypt(msg, cipher)
-    encrypted = cipher.update msg
-    encrypted << cipher.final
-    #cipher.final
+  def encrypt(msg, key)
+    encrypted = AESCrypt.encrypt(msg, key)
     encoded = [encrypted].pack("m0")
     puts "Message:"
     p msg
@@ -100,11 +99,9 @@ class Socket_Server
     encoded
   end
 
-  def decrypt(encoded, decipher)
-    encoded = encoded.strip.force_encoding 'US-ASCII'
-    encrypted = encoded.unpack("m0")[0]
-    msg = decipher.update encrypted
-    msg << decipher.final
+  def decrypt(encoded, key)
+    encrypted = encoded.strip.unpack("m0")[0]
+    msg = AESCrypt.decrypt(encrypted, key)
     puts "Message:"
     p msg
     puts "Encrypted:"
@@ -112,14 +109,6 @@ class Socket_Server
     puts "Encoded:"
     p encoded
     msg
-  end
-
-  def get_ciphers
-    cipher = OpenSSL::Cipher::Cipher.new 'des-ecb'
-    cipher.encrypt
-    decipher = OpenSSL::Cipher::Cipher.new 'des-ecb'
-    decipher.decrypt
-    return cipher, decipher
   end
 
 end
