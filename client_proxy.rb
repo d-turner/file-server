@@ -59,7 +59,7 @@ class Client_Proxy
         if line == END_TRANS
           puts 'File saved'
         else
-          file.write(line)
+          file.write(line+"\n")
         end
       end
     end

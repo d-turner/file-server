@@ -5,10 +5,6 @@ class Auth_Server < Socket_Server
 
   def initialize(port)
     super(port)
-    @salt = "\xFB\xD9\x0E\xCC\xD69\xB3\xC74-\xA2\xF3\xBA\x83\x8D\b"
-    @iter = 20000
-    @digest = OpenSSL::Digest::SHA256.new
-    @len = @digest.digest_length
     # Username => password
     # Should store passwords as Hash
     @user_names = {:dturner => "secret",
@@ -25,7 +21,7 @@ class Auth_Server < Socket_Server
 
           if read_line == END_TRANS;  client.close
 
-          elsif read_line.start_with?AUTH_USER  auth_user(client, read_line)
+          elsif read_line.start_with?AUTH_USER;  auth_user(client, read_line)
 
           else
             puts 'Command not known'

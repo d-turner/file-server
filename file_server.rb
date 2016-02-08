@@ -51,13 +51,13 @@ class File_Server < Socket_Server
   def write_file(client, filename, cipher)
     filename = filename.strip.split(':')[1]
     client.puts(encrypt(ACCEPT, cipher))
-    File.open(@dir+'/'+filename, 'w') do |f|
+    File.open(@dir+'/'+filename, 'w') do |file|
       client.each_line do |data|
         line = decrypt(data, cipher)
         if line == END_TRANS
           puts 'File saved'
         else
-          f.write(line)
+          file.write(line+"\n")
         end
       end
     end
