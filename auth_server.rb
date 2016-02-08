@@ -9,8 +9,10 @@ class Auth_Server < Socket_Server
     @iter = 20000
     @digest = OpenSSL::Digest::SHA256.new
     @len = @digest.digest_length
-    @user_names = {:dturner => "?\x9Bu\xDC\t\xD6\x93\x02^7\xC5;\f\xFATN\bA\x81\xF0x\x880\x8B\xE4\x9E\x7Fw\xA9W\xA7\x85", #secret
-                  :jturner => "7jN^\xCAEr\xE58\xA31eN\xCB\x82D\xCBD\xF8\x8DE@\xFB\xF3[\x83\xDE\x918^\x16q" #secret1
+    # Username => password
+    # Should store passwords as Hash
+    @user_names = {:dturner => "secret",
+                   :jturner => "secret1"
                  }
   end
 
@@ -23,7 +25,7 @@ class Auth_Server < Socket_Server
 
           if read_line == END_TRANS;  client.close
 
-          elsif read_line.start_with?(AUTH_USER);  auth_user(client, read_line)
+          elsif read_line.start_with?AUTH_USER  auth_user(client, read_line)
 
           else
             puts 'Command not known'
@@ -43,22 +45,20 @@ class Auth_Server < Socket_Server
 
   def auth_user(client, readline)
     username = readline.strip.split(':')[1]
-    hash = @user_names[username.to_sym]
-    unless hash.nil?
-      (cipher, cipher2) = get_ciphers
-      session_key = cipher.random_key
-      cipher.key = @server_key
-      ticket_string = "--Ticket:%s\n" % session_key
-      #ticket = cipher.update(ticket_string) + cipher.final
-      ticket = encrypt(ticket_string, cipher)
-      token_string = "--Session_key:%s\n" % session_key
+    cipher = @user_names[username.to_sym]
+    unless cipher.nil?
+      key_gen = OpenSSL::Cipher::Cipher.new 'aes-128-cbc'
+      session_key = [key_gen.random_key].pack('m0')
+
+      token_string = '--Session_key:%s' % session_key
+      ticket_string = '--Ticket:%s' % session_key
+      ticket = encrypt(ticket_string, @server_key)
+
       token = token_string + END_TRANS + ticket + END_TRANS
-      cipher2.encrypt
-      cipher2.key = hash
-      #token = cipher2.update(token) + cipher2.final
-      token = encrypt(token, cipher2)
-      client.write(token)
+      token = encrypt(token, cipher)
+      client.puts(token)
     end
+    client.puts(END_TRANS)
     client.flush
     client.close
   end

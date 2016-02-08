@@ -16,8 +16,8 @@ end
 def helo
   c = TCPSocket.new 'localhost', 3001
   c.puts("HELO anything\n")
-  deets = c.readlines
-  puts "#{deets}"
+  details = c.readlines
+  puts "#{details}"
   c.close
 end
 
