@@ -3,8 +3,6 @@ require 'find'
 class File_Server < Socket_Server
 
   def initialize(port)
-    # call initializer of the server class
-    #@port, @server, @max_threads, @max(q), @que, @ip, @main(thread)
     super(port)
     @dir = 'file_server'+@port.to_s
     request_to_join
@@ -17,25 +15,21 @@ class File_Server < Socket_Server
         client = @que.pop(false)
         begin timeout(25) do
           ticket = client.readline
-          (cipher, decipher) = get_ciphers
-          cipher.key = @server_key
-          sk = get_session_key(ticket.strip, cipher)
-          cipher.key = sk
-          decipher.key = sk
+          sk = get_session_key(ticket.strip)
           msg = client.readline
-          read_line = decrypt(msg, decipher)
+          read_line = decrypt(msg, sk)
 
           if read_line == END_TRANS;  client.close
 
           elsif read_line == KILL;  kill(client)
 
-          elsif read_line.start_with?(HELO);  student(client, read_line, cipher)
+          elsif read_line.start_with?(HELO);  student(client, read_line, sk)
 
-          elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line, cipher)
+          elsif read_line.start_with?(OPEN_FILE);  find_file(client, read_line, sk)
 
-          elsif read_line.start_with?(WRITE_FILE);  write_file(client, read_line, cipher, decipher)
+          elsif read_line.start_with?(WRITE_FILE);  write_file(client, read_line, sk)
 
-          elsif read_line == GET_LISTING;  send_file_list(client, cipher)
+          elsif read_line == GET_LISTING;  send_file_list(client, sk)
 
           else
             puts 'Command not known'
@@ -54,12 +48,12 @@ class File_Server < Socket_Server
   end
 
   # Write file on client to file server
-  def write_file(client, filename, cipher, decipher)
+  def write_file(client, filename, cipher)
     filename = filename.strip.split(':')[1]
     client.puts(encrypt(ACCEPT, cipher))
     File.open(@dir+'/'+filename, 'w') do |f|
       client.each_line do |data|
-        line = decrypt(data, decipher)
+        line = decrypt(data, cipher)
         if line == END_TRANS
           puts 'File saved'
         else
@@ -74,8 +68,7 @@ class File_Server < Socket_Server
   def send_file_list(client, cipher)
     file_names = Dir[@dir+'/**/*']
     file_names.each do |file|
-      data = encrypt(file, cipher)
-      client.puts(data)
+      client.puts(encrypt(file, cipher))
     end
     client.puts(encrypt(END_TRANS, cipher))
     client.flush
@@ -109,23 +102,16 @@ class File_Server < Socket_Server
 
   def request_to_join
     ds = TCPSocket.new DIR_ADD, DIR_PORT
-    (cipher, decipher) = get_ciphers
-    cipher.key = @server_key
-    decipher.key = @server_key
-    #msg = "--Ticket:%s\n" % @server_key
-    msg = "--Ticket:gen_random_key\n"
-    data = encrypt(msg, cipher)
-    ds.puts(data)
-    msg2 = encrypt(JOIN_REQUEST, cipher)
-    ds.puts(msg2)
-    data = ds.readline
-    read_line = decrypt(data, decipher)
+    ticket = "--Ticket:%s\n" % @server_key
+    cipher = @server_key
+    ds.puts(encrypt(ticket, cipher))
+    ds.puts(encrypt(JOIN_REQUEST, cipher))
+    read_line = decrypt(ds.readline, cipher)
     if read_line == ACCEPT
       ds.puts(encrypt(IP_ADD % @ip, cipher))
       ds.puts(encrypt(PORT_ADD % @port, cipher))
       ds.puts(encrypt(END_TRANS, cipher))
-      data = ds.readline
-      read_line = decrypt(data, decipher)
+      read_line = decrypt(ds.readline, cipher)
       if read_line == END_TRANS
         puts 'Successfully added'
       else

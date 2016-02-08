@@ -3,7 +3,6 @@ require './server'
 class Directory_Service < Socket_Server
 
   def initialize(port)
-    #@port, @server, @max_threads, @max(q), @que, @ip, @main(thread)
     super(port)
     @file_servers = []
     @files = {}
@@ -20,36 +19,31 @@ class Directory_Service < Socket_Server
               action(ticket)
               client.close
             else
-              (cipher, decipher) = get_ciphers
-              decipher.key = @server_key
-              sk = get_session_key(ticket.strip, decipher)
+              sk = get_session_key(ticket)
               puts "Session Key:"
               p sk
               puts "Server key:"
               p @server_key
-              cipher.key = sk
-              decipher.decrypt
-              decipher.key = sk
               msg = client.readline
-              read_line = decrypt(msg.strip, decipher)
+              read_line = decrypt(msg.strip, sk)
               puts "READ LINE:"
               p read_line
+
               if read_line == END_TRANS;  client.close
 
               elsif read_line == KILL;  kill(client)
 
-              elsif read_line.start_with?HELO;  student(client, read_line, cipher)
+              elsif read_line.start_with?HELO;  student(client, read_line, sk)
 
-              elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1], cipher, decipher)
+              elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1], sk)
 
-              elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1], cipher, decipher)
+              elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1], sk)
 
-              elsif read_line == JOIN_REQUEST;  manage_join(client, cipher, decipher)
+              elsif read_line == JOIN_REQUEST;  manage_join(client, sk)
 
               else
                 puts 'Command not known'
-                manage_join(client, cipher, decipher)
-                #client.close
+                client.close
               end
             end
 
@@ -64,7 +58,7 @@ class Directory_Service < Socket_Server
     end
   end
 
-  def allocate_server(client, filename, cipher, decipher)
+  def allocate_server(client, filename, cipher)
     address =  @files[filename]
     if address.nil?
       i = Random.new.rand(0..@file_servers.length-1)
@@ -76,12 +70,11 @@ class Directory_Service < Socket_Server
     client.close
   end
 
-  def lookup(client, filename, cipher, decipher)
+  def lookup(client, filename, cipher)
     address =  @files[filename]
     if address.nil?; client.puts(encrypt(NOT_FOUND, cipher))
     elsif !@file_servers.include? address;  client.puts(encrypt(NOT_FOUND, cipher))
     else client.puts(encrypt(address, cipher)); end
-    client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
@@ -90,14 +83,14 @@ class Directory_Service < Socket_Server
     @file_servers.delete(address)
   end
 
-  def manage_join(client, cipher, decipher)
+  def manage_join(client, cipher)
     client.puts(encrypt(ACCEPT, cipher))
     data = client.readline
-    fs_ip = decrypt(data, decipher)
+    fs_ip = decrypt(data, cipher)
     data = client.readline
-    fs_port = decrypt(data, decipher)
+    fs_port = decrypt(data, cipher)
     data = client.readline
-    end_trans= decrypt(data, decipher)
+    end_trans= decrypt(data, cipher)
     address = nil
     if end_trans == END_TRANS && fs_ip.start_with?('--IP:') && fs_port.start_with?('--PORT:')
       fs_ip = fs_ip.strip.split(':')[1]
@@ -128,14 +121,11 @@ class Directory_Service < Socket_Server
     begin
       (ip,port) = address.split(':')
       fs = TCPSocket.new ip, port
-      (cipher, decipher) = get_ciphers
-      cipher.key = @server_key
-      decipher.key = @server_key
+      cipher = @server_key
       fs.puts(encrypt("--Ticket:%s\n" % @server_key, cipher))
       fs.puts(encrypt(GET_LISTING, cipher))
-      puts "Fucking here"
       fs.each_line do |rd|
-        line = decrypt(rd, decipher)
+        line = decrypt(rd, cipher)
         if line == END_TRANS
           puts 'Finished gathering files...'
         else
