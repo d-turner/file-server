@@ -102,7 +102,7 @@ class File_Server < Socket_Server
 
   def request_to_join
     ds = TCPSocket.new DIR_ADD, DIR_PORT
-    ticket = "--Ticket:%s\n" % @server_key
+    ticket = '--Ticket:%s' % @server_key
     cipher = @server_key
     ds.puts(encrypt(ticket, cipher))
     ds.puts(encrypt(JOIN_REQUEST, cipher))

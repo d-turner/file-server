@@ -20,14 +20,8 @@ class Directory_Service < Socket_Server
               client.close
             else
               sk = get_session_key(ticket)
-              puts "Session Key:"
-              p sk
-              puts "Server key:"
-              p @server_key
               msg = client.readline
               read_line = decrypt(msg.strip, sk)
-              puts "READ LINE:"
-              p read_line
 
               if read_line == END_TRANS;  client.close
 

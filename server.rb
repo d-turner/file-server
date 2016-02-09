@@ -79,36 +79,22 @@ class Socket_Server
   def get_session_key(data)
     data = data.strip
     ticket = decrypt(data, @server_key)
-    if ticket.start_with?("--Ticket:")
+    if ticket.start_with?('--Ticket:')
       ticket.strip.split(':')[1]
     else
-      puts 'Failed'
+      puts 'Failed to get session key'
       nil
     end
   end
 
   def encrypt(msg, key)
     encrypted = AESCrypt.encrypt(msg, key)
-    encoded = [encrypted].pack("m0")
-    puts "Message:"
-    p msg
-    puts "Encrypted:"
-    p encrypted
-    puts "Encoded:"
-    p encoded
-    encoded
+    [encrypted].pack('m0')
   end
 
   def decrypt(encoded, key)
-    encrypted = encoded.strip.unpack("m0")[0]
-    msg = AESCrypt.decrypt(encrypted, key)
-    puts "Message:"
-    p msg
-    puts "Encrypted:"
-    p encrypted
-    puts "Encoded:"
-    p encoded
-    msg
+    encrypted = encoded.strip.unpack('m0')[0]
+    AESCrypt.decrypt(encrypted, key)
   end
 
 end
