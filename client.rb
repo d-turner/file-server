@@ -1,5 +1,5 @@
 require './client_proxy'
-@proxy  = Client_Proxy.new
+@proxy = ClientProxy.new
 
 def print(x)
   c = TCPSocket.new 'localhost', 3001
@@ -17,7 +17,7 @@ def helo
   c = TCPSocket.new 'localhost', 3001
   c.puts("HELO anything\n")
   details = c.readlines
-  puts "#{details}"
+  puts details.to_s
   c.close
 end
 
@@ -43,21 +43,21 @@ while input != "9\n"
 # Press 9 to exit\n"
   input = gets
   case input
-    when "1\n"
-      puts "Enter file name and press enter\n"
-      filename = gets
-      @proxy.open(filename.strip)
-    when "2\n"
-      puts "Enter file name and press enter\n"
-      filename = gets
-      @proxy.write(filename.strip)
-    when "3\n"; print(1)
-    when "4\n"; print(2)
-    when "5\n"; print(3)
-    when "6\n"; kill
-    when "7\n"; helo
-    when "8\n"; auth
-    when "9\n"; puts 'Goodbye'
-    else puts "I don't understand #{input}"
+  when "1\n"
+    puts "Enter file name and press enter\n"
+    filename = gets
+    @proxy.open(filename.strip)
+  when "2\n"
+    puts "Enter file name and press enter\n"
+    filename = gets
+    @proxy.write(filename.strip)
+  when "3\n" then print(1)
+  when "4\n" then print(2)
+  when "5\n" then print(3)
+  when "6\n" then kill
+  when "7\n" then helo
+  when "8\n" then auth
+  when "9\n" then puts 'Goodbye'
+  else puts "I don't understand #{input}"
   end
 end

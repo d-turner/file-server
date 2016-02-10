@@ -1,74 +1,59 @@
 require './server'
 
-class Directory_Service < Socket_Server
-
+class DirectoryService < SocketServer
   def initialize(port)
     super(port)
     @file_servers = []
     @files = {}
   end
 
-  def connection
-    begin
-      while true
-        client = @que.pop(false)
-        begin
-          timeout(25) do
-            ticket = client.readline
-            if ticket.start_with?ACTION
-              action(ticket)
-              client.close
-            else
-              sk = get_session_key(ticket)
-              msg = client.readline
-              read_line = decrypt(msg.strip, sk)
+  def connection(client, request)
+    if request.start_with?ACTION
+      action request
+      client.close
+    else
+      cipher = get_session_key(request)
+      data = client.readline
+      read_line = decrypt(data.strip, cipher)
 
-              if read_line == END_TRANS;  client.close
+      if read_line == END_TRANS; client.close
 
-              elsif read_line == KILL;  kill(client)
+      elsif read_line.start_with?FIND_SERVER
+        lookup(client, read_line.strip.split(':')[1], cipher)
 
-              elsif read_line.start_with?HELO;  student(client, read_line, sk)
+      elsif read_line.start_with?WRITE_FILE
+        allocate_server(client, read_line.strip.split(':')[1], cipher)
 
-              elsif read_line.start_with?FIND_SERVER;  lookup(client, read_line.strip.split(':')[1], sk)
+      elsif read_line.start_with?JOIN_REQUEST
+        manage_join(client, cipher)
 
-              elsif read_line.start_with?WRITE_FILE;  allocate_server(client, read_line.strip.split(':')[1], sk)
-
-              elsif read_line == JOIN_REQUEST;  manage_join(client, sk)
-
-              else
-                puts 'Command not known'
-                client.close
-              end
-            end
-
-          end
-        rescue Timeout::Error
-          puts 'Timed Out!'
-          client.close
-        end
+      else
+        puts 'Command not known'
+        client.close
       end
-    rescue ThreadError
-      puts 'Thread Error'
     end
   end
 
   def allocate_server(client, filename, cipher)
-    address =  @files[filename]
+    address = @files[filename]
     if address.nil?
-      i = Random.new.rand(0..@file_servers.length-1)
+      i = Random.new.rand(0..@file_servers.length - 1)
       client.puts(encrypt(@file_servers[i], cipher))
       @files[filename] = @file_servers[i]
-    else client.puts(encrypt(address, cipher)); end
+    else client.puts(encrypt(address, cipher))
+    end
     client.puts(encrypt(END_TRANS, cipher))
     client.flush
     client.close
   end
 
   def lookup(client, filename, cipher)
-    address =  @files[filename]
+    address = @files[filename]
     if address.nil?; client.puts(encrypt(NOT_FOUND, cipher))
-    elsif !@file_servers.include? address;  client.puts(encrypt(NOT_FOUND, cipher))
-    else client.puts(encrypt(address, cipher)); end
+    elsif !@file_servers.include? address
+      client.puts(encrypt(NOT_FOUND, cipher))
+    else client.puts(encrypt(address, cipher))
+    end
     client.flush
     client.close
   end
@@ -84,9 +69,11 @@ class Directory_Service < Socket_Server
     data = client.readline
     fs_port = decrypt(data, cipher)
     data = client.readline
-    end_trans= decrypt(data, cipher)
+    end_trans = decrypt(data, cipher)
     address = nil
-    if end_trans == END_TRANS && fs_ip.start_with?('--IP:') && fs_port.start_with?('--PORT:')
+    if (end_trans == END_TRANS) &&
+       (fs_ip.start_with?('--IP:') &&
+        fs_port.start_with?('--PORT:'))
       fs_ip = fs_ip.strip.split(':')[1]
       fs_port = fs_port.strip.split(':')[1]
       address = fs_ip + ':' + fs_port
@@ -116,7 +103,7 @@ class Directory_Service < Socket_Server
       (ip,port) = address.split(':')
       fs = TCPSocket.new ip, port
       cipher = @server_key
-      fs.puts(encrypt("--Ticket:%s\n" % @server_key, cipher))
+      fs.puts(encrypt(TICKET + @server_key, cipher))
       fs.puts(encrypt(GET_LISTING, cipher))
       fs.each_line do |rd|
         line = decrypt(rd, cipher)
@@ -151,21 +138,21 @@ class Directory_Service < Socket_Server
   def action(read_line)
     action = read_line.strip.split(':')[1]
     case action
-    when '1'; print_files
-    when '2'; print_servers
-    when '3'; query_servers
-    else ; print 'No action'
+    when '1' then print_files
+    when '2' then print_servers
+    when '3' then query_servers
+    else print 'No action'
     end
   end
 end
 
 port = 3001
-if ARGV[0] == nil
+if ARGV[0].nil?
   puts "No Port Specified using default #{port}"
 else
   port = ARGV[0]
   puts "Using Port Number #{port}"
 end
 
-server = Directory_Service.new(port)
+server = DirectoryService.new(port)
 server.run

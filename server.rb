@@ -1,29 +1,12 @@
 require 'thread'
 require 'socket'
 require 'timeout'
-require 'aescrypt'
-require 'base64'
-require 'rubygems'
-END_TRANS = '--END--'
-NOT_FOUND = '404'
-JOIN_REQUEST = '--JOIN_REQUEST--'
-ACCEPT = '--ACCEPT--'
-DECLINE = '--DECLINE--'
-GET_LISTING = '--FILE_LIST--'
-FIND_SERVER = '--WHERE_IS:'
-OPEN_FILE = '--OPEN:'
-WRITE_FILE = '--WRITE:'
-KILL = 'KILL_SERVICE'
-HELO = 'HELO'
-IP_ADD = '--IP:%s'
-PORT_ADD = '--PORT:%s'
-ACTION = '--ACTION:'
-AUTH_USER = '--AUTHENTICATE:'
-DIR_ADD = 'localhost'
-DIR_PORT = 3001
+require './protocol'
+require './cipher'
 
-class Socket_Server
-
+class SocketServer
+  include MyCipher
+  include Protocol
   def initialize(port)
     @port = port
     @server = TCPServer.new @port
@@ -33,12 +16,12 @@ class Socket_Server
     addr_infos = Socket.ip_address_list
     @ip = addr_infos[1].ip_address.to_s
     @threads = nil
-    @server_key = "VGYXKPb/9VYo7g9sYQ8i8Q=="
+    @server_key = 'VGYXKPb/9VYo7g9sYQ8i8Q=='
   end
 
   def run
     Thread.new {
-      while true do
+      while true
         if @que.length > @max
           @server.reject
         else
@@ -47,54 +30,54 @@ class Socket_Server
       end
     }
     @threads = @max_threads.times.map do
-      Thread.new{connection}
+      Thread.new{ handle_client }
     end
-    @threads.map &:join
+    @threads.map { |t| t.join }
     puts 'Quiting'
   end
 
-  # outdated
-  def connection
+  def handle_client
+    begin
+      while true
+        client = @que.pop(false)
+        begin timeout(50) do
+          read_line = (client.readline).strip
+          if read_line.start_with?KILL; kill(client)
+
+          elsif read_line.start_with?HELO; student(client, read_line)
+
+          else connection(client, read_line)
+          end
+        end
+        rescue Timeout::Error
+          puts 'Timed Out!'
+          client.close
+        end
+      end
+    rescue ThreadError
+      puts 'Thread Error'
+    end
+  end
+
+  def connection(client, read_line)
     # do some server stuff
   end
 
   def kill(client)
     client.close
     puts 'Killing'
-    @online = false
     @threads.each do |thread|
-      thread.exit unless thread == Thread.current
+      thread.exit unless thread.equal?Thread.current
     end
     Thread.exit
   end
 
-  def student(client, read_line, cipher)
-    reply = read_line.concat("IP:#{@ip}\nPort:#{@port}\nStudentID:33d4fcfd69df0c9bbbd0bd54ce854663db8238836b6faec70a00cf9e835a6bd1\n")
-    data = encrypt(reply, cipher)
-    client.puts(data)
+  def student(client, read_line)
+    reply = read_line.concat("IP:#{@ip}\nPort:#{@port}\n
+                             StudentID:33d4fcfd69df0c9bbbd0bd54ce8546
+                              63db8238836b6faec70a00cf9e835a6bd1\n")
+    client.puts(reply)
     client.flush
     client.close
   end
-
-  def get_session_key(data)
-    data = data.strip
-    ticket = decrypt(data, @server_key)
-    if ticket.start_with?('--Ticket:')
-      ticket.strip.split(':')[1]
-    else
-      puts 'Failed to get session key'
-      nil
-    end
-  end
-
-  def encrypt(msg, key)
-    encrypted = AESCrypt.encrypt(msg, key)
-    [encrypted].pack('m0')
-  end
-
-  def decrypt(encoded, key)
-    encrypted = encoded.strip.unpack('m0')[0]
-    AESCrypt.decrypt(encrypted, key)
-  end
-
 end
