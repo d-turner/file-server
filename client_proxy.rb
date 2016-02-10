@@ -62,17 +62,19 @@ class ClientProxy
 
     TCPSocket.open ip, port do |fs|
       fs.puts(@ticket)
-      fs.puts(encrypt(WRITE_FILE % filename, @session_key))
+      fs.puts(encrypt(msg, @session_key))
       reply = decrypt(fs.readline, @session_key)
-
       if reply == END_TRANS; puts 'Failed to add file...'
 
       elsif File.exist?(@output_dir + filename)
+        puts "here"
         File.open(@output_dir + filename, 'r') do |file|
           file.each_line do |line|
             fs.puts(encrypt(line, @session_key))
           end
         end
+      else
+        puts 'File does not exist'
       end
       fs.puts(encrypt(END_TRANS, @session_key))
       fs.flush

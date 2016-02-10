@@ -16,24 +16,12 @@ module MyCipher
   end
 
   def encrypt(msg, key)
-    puts 'Using key:'
-    p key
-    puts 'Sending:'
-    p msg
     encrypted = AESCrypt.encrypt(msg, key)
-    puts 'Encrypted:'
-    p [encrypted].pack('m0')
+    [encrypted].pack('m0')
   end
 
   def decrypt(encoded, key)
-    puts 'Using key:'
-    p key
-    puts 'Received:'
-    p encoded
     encrypted = encoded.strip.unpack('m0')[0]
-    puts 'Message:'
-    msg = AESCrypt.decrypt(encrypted, key)
-    p msg
-    msg
+    AESCrypt.decrypt(encrypted, key)
   end
 end
