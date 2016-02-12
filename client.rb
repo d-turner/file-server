@@ -1,21 +1,22 @@
 require './client_proxy'
+include Protocol
 @proxy = ClientProxy.new
 
 def print(x)
   c = TCPSocket.new 'localhost', 3001
-  c.puts("--ACTION:#{x}\n")
+  c.puts(ACTION + x)
   c.close
 end
 
 def kill
   c = TCPSocket.new 'localhost', 3001
-  c.puts("KILL_SERVICE\n")
+  c.puts(KILL)
   c.close
 end
 
 def helo
   c = TCPSocket.new 'localhost', 3001
-  c.puts("HELO anything\n")
+  c.puts(HELO + " anything")
   details = c.readlines
   puts details.to_s
   c.close

@@ -1,4 +1,4 @@
-require 'socket'
+	require 'socket'
 require './cipher'
 require './protocol'
 
