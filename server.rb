@@ -14,6 +14,7 @@ class SocketServer
     @max = 1_000
     @que = Queue.new
     addr_infos = Socket.ip_address_list
+	p addr_infos
     @ip = addr_infos[1].ip_address.to_s
     @threads = nil
     @server_key = 'VGYXKPb/9VYo7g9sYQ8i8Q=='
@@ -73,7 +74,7 @@ class SocketServer
   end
 
   def student(client, read_line)
-    reply = read_line.concat("IP:#{@ip}\nPort:#{@port}\n
+    reply = read_line.concat("\nIP:#{@ip}\nPort:#{@port}\n
                              StudentID:33d4fcfd69df0c9bbbd0bd54ce8546
                               63db8238836b6faec70a00cf9e835a6bd1\n")
     client.puts(reply)
