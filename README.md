@@ -9,7 +9,7 @@ Requires thread, socket
 
 ## Needs to be done
 ### Proxy
-A client side file proxy should be provided that hides all access 
+A client side file proxy should be provided that hides all access  
 to the file system behind a simple language specific mechanism.  
 
 ````
