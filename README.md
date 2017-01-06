@@ -23,7 +23,7 @@ end
 ### Initialize the directory server
 Scan / Query the file servers for a list of directories and files.  
 Map the returned values to the ip and port addresses of the servers.  
-Each user can access all files on any server orcan implement 
+Each user can access all files on any server or can implement  
 user based directory structure if doing authentication.
 
 ## Security 
